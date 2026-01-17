@@ -1,322 +1,242 @@
-# 菜谱架构设计
+# Pythonic菜谱框架
 
-基于Python的菜谱架构,结合design1的Component抽象和design2的Pythonic风格,提供了一个灵活、可扩展的菜谱定义框架。
+一个优雅的Python菜谱定义框架，使用中文命名，支持自动生成Markdown格式的菜谱文档。
 
-## 设计理念
+## 特性
 
-### 1. 核心抽象 - Component
+- **统一抽象**: 所有食材、中间产物、最终菜品都抽象为`食材组件`对象
+- **Pythonic设计**: 装饰器、上下文管理器、操作符重载、中文命名
+- **类型安全**: 完整的类型注解，Protocol-based接口
+- **强扩展性**: 插件化的处理器系统，支持多种输出格式
+- **菜谱复用**: 轻松引用和组合已定义的菜谱
 
-所有食材、中间产物、最终菜品都抽象为`Component`对象,这是整个架构的核心概念。
+## 快速开始
 
-```python
-@dataclass
-class Component:
-    name: str                          # 名称
-    id: int                            # 唯一标识符
-    amount: Optional[Amount] = None   # 数量
-    ingredients: List[Component]       # 包含的子Component
-    metadata: Dict[str, Any]           # 元数据(营养成分等)
-    procedure: Optional[Procedure]     # 操作过程
-    is_ingredient: bool                # 是否为原始食材
-```
-
-**优势**:
-- 统一的抽象,简化了菜谱定义
-- 支持嵌套和组合
-- 可以携带任意元数据(营养成分、热量等)
-
-### 2. 工厂模式 - RecipeProcessor
-
-参考design1的Factorible trait,使用Python的Protocol定义处理器接口:
+### 定义菜谱（推荐使用装饰器）
 
 ```python
-class RecipeProcessor(Protocol):
-    def require(self, name: str, amount: Amount) -> Component:
-        """声明需要的食材"""
-        ...
+from 菜谱框架 import *
 
-    def process(
-        self,
-        components: List[Component],
-        procedure: Procedure,
-        name: str,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> Component:
-        """处理食材"""
-        ...
+@定义菜谱("番茄炒蛋")
+def 番茄炒蛋(菜: 菜谱构建器):
+    番茄 = 菜.切(菜.取食材("番茄", 个(2)), "块")
+    鸡蛋 = 菜.取食材("鸡蛋", 个(3))
+    葱 = 菜.切(菜.取食材("葱", 根(1)), "段")
+    盐 = 菜.取食材("盐", 克(3))
+
+    炒蛋 = 菜.炒([鸡蛋], 时间_秒=30, 描述="炒", 用油=10, 名称="炒鸡蛋")
+    炒番茄 = 菜.炒([番茄], 时间_秒=20, 描述="炒", 用油=5, 名称="炒番茄")
+    混合 = 菜.混合([炒蛋, 炒番茄], "翻炒均匀")
+    最终 = 菜.调味([混合], ["葱", "盐"], "加入盐和葱花")
+
+    return 最终
 ```
 
-**优势**:
-- 通过Protocol实现鸭子类型
-- 可以轻松实现不同的处理器
-- 支持多种输出格式(Markdown、统计、机器人指令等)
-
-### 3. Pythonic特性
-
-充分利用Python的特性:
-
-- **dataclass**: 简化类定义
-- **Protocol**: 实现接口约束
-- **typing**: 完整的类型注解
-- **Enum**: 枚举操作类型
-- **链式调用**: 优雅的API设计
-- **类型安全**: 编译期类型检查
-
-## 核心组件
-
-### Amount - 数量表示
+### 生成Markdown菜谱
 
 ```python
-# 支持多种单位
-Gram(600)      # 600克
-Number(1)      # 1个
-Piece(2)       # 2片
-Root(1)        # 1根
-Other("1根")   # 其他描述
+from 菜谱框架 import 预览菜谱, 生成菜谱文档, 生成所有菜谱
+
+# 预览菜谱（控制台输出）
+预览菜谱("番茄炒蛋")
+
+# 生成单个菜谱文件
+生成菜谱文档("番茄炒蛋", "菜谱/番茄炒蛋.md")
+
+# 批量生成所有已注册菜谱
+生成所有菜谱(输出目录="菜谱文档")
 ```
 
-### Procedure - 操作过程
+## 核心概念
+
+### 食材组件
+
+所有食材、中间产物、最终菜品都统一抽象为`食材组件`：
 
 ```python
-# 内置操作
-Procedure.cut("段")          # 切成段
-Procedure.cut("碎")          # 切成碎
-Procedure.mix("混合")        # 混合
-Procedure.fry(60, "中火")    # 炒60秒
-Procedure.stew(120)          # 炖120秒
-
-# 自定义操作
-Procedure.other("夹在一起")
+@dataclass(slots=True)
+class 食材组件:
+    name: str
+    id: int  # 自动递增
+    数量: Optional[数量类型] = None
+    子组件: List[食材组件]
+    元数据: Dict[str, Any]
+    操作: Optional[烹饪操作] = None
+    是否基础食材: bool = False
 ```
 
-### 处理器实现
-
-#### MarkdownProcessor - Markdown输出
+### 数量类型
 
 ```python
-processor = MarkdownProcessor()
-result = italian_sauce_sandwich(processor)
-
-for op in processor.get_operations():
-    print(op)
+克(500)      # 500克
+个(2)        # 2个
+片(3)        # 3片
+根(1)        # 1根
+毫升(100)    # 100毫升
+自定义单位("1勺")  # 自定义描述
 ```
 
-**输出示例**:
-```
-取出 2片 的 `面包片 #1`
-取出 1根 的 `芹菜 #2`
-将 `芹菜 #2` 切成段，得到 `芹菜段 #3`
-...
-将 `面包片 #1`, `意大利肉酱 #9` 夹在一起，得到 `意大利肉酱三明治 #10`
-```
-
-#### StatisticsProcessor - 统计信息
+### 烹饪操作
 
 ```python
-processor = StatisticsProcessor()
-italian_sauce_sandwich(processor)
-processor.print_statistics()
+切("块")           # 切割
+混合("拌匀")       # 混合
+炒(30, "中火")     # 炒30秒
+炖(120, "小火")    # 炖120秒
 ```
 
-**输出示例**:
-```
-=== 食材统计 ===
-- 面包片: 2片
-- 芹菜:
-- 猪肉: 600克
-- 洋葱: 1个
-- 番茄酱: 100克
-```
+### 处理器
 
-#### CompositeProcessor - 组合处理器
+处理器负责将菜谱转换为不同的输出格式：
 
-同时使用多个处理器:
+- **Markdown输出器**: 生成Markdown格式的烹饪步骤
+- **统计分析器**: 统计食材用量
+- **组合处理器**: 同时使用多个处理器
+
+## 菜谱定义风格
+
+### 1. 装饰器风格（推荐）
 
 ```python
-markdown_proc = MarkdownProcessor()
-stats_proc = StatisticsProcessor()
-composite = CompositeProcessor([markdown_proc, stats_proc])
-italian_sauce_sandwich(composite)
+@定义菜谱("意大利肉酱")
+def 意大利肉酱(菜: 菜谱构建器):
+    芹菜段 = 菜.切(菜.取食材("芹菜", 根(1)), "段")
+    猪肉碎 = 菜.切(菜.取食材("猪肉", 克(600)), "碎")
+    洋葱丁 = 菜.切(菜.取食材("洋葱", 个(1)), "碎")
+    番茄酱 = 菜.取食材("番茄酱", 克(100))
+
+    return 菜.混合([芹菜段, 猪肉碎, 洋葱丁, 番茄酱],
+                  "混合，下锅翻炒一分钟",
+                  "意大利肉酱")
 ```
 
-## 使用示例
-
-### 1. 函数式定义风格
-
-参考design1的简洁风格:
+### 2. 上下文管理器风格
 
 ```python
-def italian_sauce(factory: RecipeProcessor) -> Component:
-    return factory.process(
-        [
-            factory.process(
-                [factory.require("芹菜", Other("1根"))],
-                Procedure.cut("段"),
-                "芹菜段"
-            ),
-            factory.process(
-                [factory.require("猪肉", Gram(600))],
-                Procedure.cut("碎"),
-                "猪肉碎"
-            ),
-            factory.process(
-                [factory.require("洋葱", Number(1))],
-                Procedure.cut("碎"),
-                "洋葱丁"
-            ),
-            factory.require("番茄酱", Gram(100))
-        ],
-        Procedure.mix("混合，下锅翻炒一分钟"),
-        "意大利肉酱"
-    )
-
-def italian_sauce_sandwich(factory: RecipeProcessor) -> Component:
-    return factory.process(
-        [
-            factory.require("面包片", Piece(2)),
-            italian_sauce(factory),  # 复用子菜谱!
-        ],
-        Procedure.other("夹在一起"),
-        "意大利肉酱三明治"
-    )
+with 菜谱上下文(Markdown输出器()) as 菜:
+    芹菜段 = 菜.切(菜.取食材("芹菜", 根(1)), "段")
+    猪肉碎 = 菜.切(菜.取食材("猪肉", 克(600)), "碎")
+    肉酱 = 菜.混合([芹菜段, 猪肉碎, ...], "混合，下锅翻炒一分钟")
 ```
 
-### 2. 链式调用风格
-
-使用RecipeBuilder提供更简洁的API:
+### 3. 操作符重载风格
 
 ```python
-builder = RecipeBuilder(MarkdownProcessor())
-
-# 准备食材
-bread = builder.require("面包片", Piece(2))
-celery = builder.require("芹菜", Other("1根"))
-pork = builder.require("猪肉", Gram(600))
-onion = builder.require("洋葱", Number(1))
-sauce = builder.require("番茄酱", Gram(100))
-
-# 处理食材
-celery_cut = builder.cut(celery, "段", "芹菜段")
-pork_cut = builder.cut(pork, "碎", "猪肉碎")
-onion_cut = builder.cut(onion, "碎", "洋葱丁")
-
-# 混合
-meat_sauce = builder.mix(
-    [celery_cut, pork_cut, onion_cut, sauce],
-    "混合，下锅翻炒一分钟",
-    "意大利肉酱"
-)
-
-# 最终菜品
-sandwich = builder.custom(
-    [bread, meat_sauce],
-    "夹在一起",
-    "意大利肉酱三明治"
-)
+芹菜段 = 菜.取食材("芹菜", 根(1)) >> 切("段")
+猪肉碎 = 菜.取食材("猪肉", 克(600)) >> 切("碎")
+肉酱 = (芹菜段 + 猪肉碎 + 洋葱丁) >> 混合("混合")
 ```
 
-## 扩展性
-
-### 自定义处理器
-
-实现RecipeProcessor接口即可:
+## 菜谱复用
 
 ```python
-class RobotProcessor:
-    """机器人执行处理器"""
-    def __init__(self):
-        self.commands = []
+@定义菜谱("意大利肉酱三明治")
+def 意大利肉酱三明治(菜: 菜谱构建器):
+    面包片 = 菜.取食材("面包片", 片(2))
+    # 引用已定义的菜谱
+    肉酱 = 菜.引用("意大利肉酱")
 
-    def require(self, name: str, amount: Amount) -> Component:
-        self.commands.append(f"ARM_GET({name}, {amount})")
-        return Component(name=name, amount=amount)
-
-    def process(
-        self,
-        components: List[Component],
-        procedure: Procedure,
-        name: str,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> Component:
-        cmd = f"ARM_PROCESS({procedure.type}, {[c.name for c in components]})"
-        self.commands.append(cmd)
-        return Component(name=name, ingredients=components, procedure=procedure)
+    return 菜.组合([面包片, 肉酱], "夹在一起", "意大利肉酱三明治")
 ```
 
-### 自定义Amount类型
+## 框架结构
 
-```python
-@dataclass(frozen=True)
-class Cup(Amount):
-    """杯"""
-    def __post_init__(self):
-        object.__setattr__(self, 'unit', '杯')
 ```
-
-### 自定义Procedure
-
-```python
-@classmethod
-def bake(cls, temperature: int, time: int) -> "Procedure":
-    desc = f"在{temperature}°C下烤{time}分钟"
-    return cls("bake", desc, {"temperature": temperature, "time": time})
+菜谱框架/
+├── __init__.py              # 框架入口
+├── 核心组件.py              # 食材组件、数量类型、烹饪操作
+├── 处理器.py                # 处理器协议和实现
+├── 构建器.py                # 菜谱构建器
+├── 装饰器.py                # 装饰器和注册表
+└── markdown生成器.py        # Markdown文档生成器
 ```
-
-## 架构优势
-
-### 1. 与design1对比
-
-| 特性 | design1 (Rust) | 本架构 (Python) |
-|------|---------------|-----------------|
-| 抽象 | Component + Trait | Component + Protocol |
-| 类型系统 | 严格静态 | 动态 + 类型注解 |
-| 元编程 | 宏 | 内省 + dataclass |
-| 学习曲线 | 较高 | 较低 |
-
-### 2. 与design2对比
-
-| 特性 | design2 | 本架构 |
-|------|---------|---------|
-| 抽象 | Food + Meal | 统一的Component |
-| 扩展性 | 继承 | Protocol + 组合 |
-| 复用性 | 子Meal | 函数式组件 |
-| 输出格式 | Markdown | 可扩展(多种处理器) |
-
-### 3. 核心优势
-
-- **统一抽象**: 一切皆Component
-- **高度可扩展**: 通过Protocol实现处理器
-- **强类型**: 完整的类型注解,支持IDE智能提示
-- **简洁**: 函数式风格,最小化冗余
-- **复用性**: 菜谱可以作为组件被其他菜谱引用
-- **Pythonic**: 充分利用Python特性
 
 ## 运行示例
 
 ```bash
-python recipe_architecture.py
+# 基础示例（展示所有定义风格）
+python 示例/基础示例.py
+
+# 完整菜谱示例
+python 示例/完整菜谱.py
+
+# Markdown生成示例
+python 示例/生成markdown菜谱.py
+
+# 简单测试
+python 简单测试.py
 ```
 
-输出包括:
-- Markdown格式的烹饪步骤
-- 食材统计信息
-- 链式调用示例
+## 生成的Markdown示例
 
-## 未来扩展
+```markdown
+# 番茄炒蛋
 
-1. **营养成分计算**: 在metadata中存储营养成分,自动计算
-2. **菜谱验证**: 检查食材是否可用,操作是否合理
-3. **可视化**: 生成菜谱流程图
-4. **时间优化**: 并行执行可独立的操作
-5. **数据库持久化**: 保存和加载菜谱
+## 食材清单
 
-## 总结
+- **番茄**: 2个
+- **鸡蛋**: 3个
+- **葱**: 1根
+- **盐**: 3克
 
-本架构融合了design1的Component抽象和函数式风格,以及design2的Pythonic特性,提供了一个:
-- **简洁**: 菜谱定义清晰,无冗余
-- **灵活**: 支持多种处理器和输出格式
-- **可扩展**: 易于添加新功能和自定义
+## 烹饪步骤
+
+1. 将 2个 的 番茄 切成块
+2. 将 1根 的 葱 切成段
+3. 将 鸡蛋 炒30秒，用10克油，炒
+4. 将 番茄 炒20秒，用5克油，炒
+5. 将 炒鸡蛋, 番茄 翻炒均匀
+6. 将 混合好的 加入葱, 盐
+
+---
+
+## 备注
+
+- 本菜谱由Pythonic菜谱框架自动生成
+```
+
+## 技术亮点
+
+- **不可变数据**: `@dataclass(frozen=True, slots=True)`
+- **Protocol**: 类型安全的鸭子类型
+- **操作符重载**: `+`, `>>`, `&` 使代码更直观
+- **装饰器注册**: `@定义菜谱` 自动注册菜谱
+- **上下文管理器**: `with 菜谱上下文` 优雅语法
+
+## 扩展框架
+
+### 自定义处理器
+
+实现`菜谱处理器`协议：
+
+```python
+class RobotProcessor:
+    def 取食材(self, 名称: str, 数量: 数量类型) -> 食材组件:
+        # 生成机器人指令
+        ...
+
+    def 处理(self, 组件: List[食材组件], 操作: 烹饪操作, 名称: str, **元数据) -> 食材组件:
+        # 生成处理指令
+        ...
+```
+
+### 自定义数量类型
+
+```python
+@dataclass(frozen=True, slots=True)
+class 杯(数量类型):
+    def __post_init__(self):
+        object.__setattr__(self, 'unit', '杯')
+```
+
+## 设计原则
+
+- **统一抽象**: 一切皆食材组件
+- **高度可扩展**: Protocol-based处理器系统
 - **类型安全**: 完整的类型注解
+- **简洁**: 函数式风格，最小化冗余
 - **Pythonic**: 充分利用Python特性
 
-的菜谱定义框架。
+## 许可证
+
+MIT License

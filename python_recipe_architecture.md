@@ -1,1 +1,0 @@
-# Python Recipe Architecture Design
