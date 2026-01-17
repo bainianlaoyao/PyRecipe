@@ -1,4 +1,4 @@
-# Pythonic菜谱框架
+# PyRecipe
 
 一个优雅的Python菜谱定义框架，使用中文命名，支持自动生成Markdown格式的菜谱文档。
 
